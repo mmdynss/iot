@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Sensor & GPS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body, html {
+      margin: 0; padding: 0; height: 100%; width: 100%;
+      font-family: 'Inter', sans-serif; overflow: hidden;
+      transition: background 0.5s ease;
+    }
+    #map { height: 100vh; width: 100%; z-index: 10; }
+    .data-card {
+      background: #ffffff; border-radius: 1rem;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      padding: 1rem; display: flex; flex-direction: column;
+      justify-content: center; align-items: center; text-align: center;
+      position: relative; transition: transform 0.3s ease, background 0.5s;
+    }
+    .data-card:hover { transform: translateY(-5px); }
+    .card-title { font-size: 0.875rem; font-weight: 600; color: #4a5568; }
+    .card-value { font-size: 1.25rem; font-weight: 700; margin-top: 0.25rem; }
+    .status-indicator { position: absolute; top: 0.5rem; right: 0.5rem; width: 10px; height: 10px; border-radius: 50%; }
+    .sparkline { width: 100%; height: 40px; }
+    .highlight { animation: flash 1s; }
+    @keyframes flash { 0%{background:#fde68a;} 100%{background:transparent;} }
+    body.dark { background:#1a202c; color:#e2e8f0; }
+    body.dark .data-card { background:#2d3748; color:#edf2f7; }
+    body.dark .card-title { color:#a0aec0; }
+  </style>
+</head>
+<body>
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Panel Dashboard -->
+  <div class="absolute top-4 left-4 z-20 w-96 bg-white bg-opacity-90 backdrop-blur-sm rounded-3xl p-6 shadow-2xl dark:bg-gray-800">
+    <div class="flex justify-between items-center mb-2">
+      <!-- Judul diganti + warna hitam -->
+      <h2 class="text-xl font-bold text-black">Kondisi Lingkungan Terkini</h2>
+      <!-- Jam warna hitam -->
+      <p class="text-sm text-black" id="clock">--:--:--</p>
+    </div>
+    <p class="text-center text-sm text-gray-600 dark:text-gray-400 mb-2">Kota Tanjungpinang</p>
+
+    <div class="grid grid-cols-2 gap-4 mt-2">
+      <!-- Suhu -->
+      <div class="data-card">
+        <div class="status-indicator bg-green-500"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v10m6-6H6" />
+        </svg>
+        <p class="card-title">Suhu</p>
+        <p class="card-value"><span id="suhu">--</span> °C</p>
+        <canvas id="spark-suhu" class="sparkline"></canvas>
+      </div>
+
+      <!-- Kelembapan -->
+      <div class="data-card">
+        <div class="status-indicator bg-green-500"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 22c4.418 0 8-3.582 8-8s-8-12-8-12-8 7.582-8 12 3.582 8 8 8z" />
+        </svg>
+        <p class="card-title">Kelembapan</p>
+        <p class="card-value"><span id="kelembapan">--</span> %</p>
+        <canvas id="spark-kelembapan" class="sparkline"></canvas>
+      </div>
+
+      <!-- Cahaya -->
+      <div class="data-card col-span-2">
+        <div class="status-indicator bg-green-500"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v2m0 14v2m8.485-10.485h2m-18 0h2M16.95 7.05l1.414-1.414M5.636 18.364l1.414-1.414M16.95 16.95l1.414 1.414M5.636 5.636l1.414 1.414" />
+        </svg>
+        <p class="card-title">Cahaya</p>
+        <p class="card-value"><span id="cahaya">--</span> lux</p>
+        <canvas id="spark-cahaya" class="sparkline"></canvas>
+      </div>
+
+      <!-- Kecepatan -->
+      <div class="data-card">
+        <div class="status-indicator bg-green-500"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12h3m12 0h3m-9-9v3m0 12v3m-6.364-6.364l2.121 2.121M16.95 7.05l2.121-2.121" />
+        </svg>
+        <p class="card-title">Kecepatan</p>
+        <p class="card-value"><span id="kecepatan">--</span> km/jam</p>
+        <canvas id="spark-kecepatan" class="sparkline"></canvas>
+      </div>
+
+      <!-- Satelit -->
+      <div class="data-card">
+        <div class="status-indicator bg-green-500"></div>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11c0-1.104.896-2 2-2s2 .896 2 2-.896 2-2 2-2-.896-2-2zM20 20h-8v-2h8v2zm0-4h-8v-2h8v2z" />
+        </svg>
+        <p class="card-title">Satelit</p>
+        <p class="card-value"><span id="satelit">--</span></p>
+        <canvas id="spark-satelit" class="sparkline"></canvas>
+      </div>
+    </div>
+
+    <!-- GPS -->
+    <div class="mt-4 p-3 bg-gray-100 rounded-lg text-xs text-gray-600 dark:bg-gray-700 dark:text-gray-300">
+      <p><span class="font-semibold">Latitude:</span> <span id="latitude">--</span></p>
+      <p><span class="font-semibold">Longitude:</span> <span id="longitude">--</span></p>
+    </div>
+  </div>
+
+  <!-- Firebase & Leaflet -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBsvJ74f-5c3znaKsx-Eyh0hJk54EorKiE",
+      authDomain: "lux-tracker.firebaseapp.com",
+      databaseURL: "https://lux-tracker-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "lux-tracker",
+      storageBucket: "lux-tracker.firebasestorage.app",
+      messagingSenderId: "48628665044",
+      appId: "1:48628665044:web:bade6d15d38e51a5bc4941"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+
+    const map = L.map('map').setView([0.9167, 104.45], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let marker = null;
+    function createPulseIcon(color) {
+      return L.divIcon({
+        className: '',
+        html: `<div class="pulse" style="background:${color}"><div style="width:20px;height:20px;border-radius:50%;background:${color};opacity:0.4;position:absolute;top:0;left:0;animation:pulse 1.5s infinite;"></div></div>`,
+        iconSize: [20, 20], iconAnchor: [10, 10]
+      });
+    }
+
+    const sparkSuhu=[], sparkCahaya=[], sparkKelembapan=[], sparkKecepatan=[], sparkSatelit=[];
+    function drawSparkline(canvasId, data, color) {
+      const canvas=document.getElementById(canvasId), ctx=canvas.getContext("2d");
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      if(data.length<2) return;
+      ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2;
+      const step=canvas.width/(data.length-1), maxVal=Math.max(...data);
+      data.forEach((val,i)=>{ const x=i*step, y=canvas.height-(val/maxVal)*canvas.height; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+      ctx.stroke();
+    }
+
+    const dataRef=ref(db,"data");
+    onValue(dataRef,(snapshot)=>{
+      if(snapshot.exists()){
+        const d=snapshot.val();
+        ["suhu","kelembapan","cahaya","kecepatan","latitude","longitude","satelit"].forEach(id=>{
+          const el=document.getElementById(id); el.classList.add("highlight");
+          setTimeout(()=>el.classList.remove("highlight"),500);
+        });
+
+        document.getElementById("suhu").textContent=Number(d.suhu).toFixed(2);
+        document.getElementById("kelembapan").textContent=Number(d.kelembapan).toFixed(2);
+        document.getElementById("cahaya").textContent=Number(d.cahaya).toFixed(2);
+        document.getElementById("kecepatan").textContent=Number(d.kecepatan).toFixed(2);
+        document.getElementById("latitude").textContent=Number(d.latitude).toFixed(6);
+        document.getElementById("longitude").textContent=Number(d.longitude).toFixed(6);
+        document.getElementById("satelit").textContent=d.jumlah_satelit;
+
+        const lat=Number(d.latitude), lng=Number(d.longitude), newLatLng=[lat,lng];
+        if(!marker) marker=L.marker(newLatLng,{icon:createPulseIcon("blue")}).addTo(map);
+        else marker.setLatLng(newLatLng);
+        map.setView(newLatLng,14);
+
+        sparkSuhu.push(Number(d.suhu)); if(sparkSuhu.length>20) sparkSuhu.shift();
+        sparkCahaya.push(Number(d.cahaya)); if(sparkCahaya.length>20) sparkCahaya.shift();
+        sparkKelembapan.push(Number(d.kelembapan)); if(sparkKelembapan.length>20) sparkKelembapan.shift();
+        sparkKecepatan.push(Number(d.kecepatan)); if(sparkKecepatan.length>20) sparkKecepatan.shift();
+        sparkSatelit.push(Number(d.jumlah_satelit)); if(sparkSatelit.length>20) sparkSatelit.shift();
+
+        drawSparkline("spark-suhu",sparkSuhu,"red");
+        drawSparkline("spark-cahaya",sparkCahaya,"orange");
+        drawSparkline("spark-kelembapan",sparkKelembapan,"blue");
+        drawSparkline("spark-kecepatan",sparkKecepatan,"purple");
+        drawSparkline("spark-satelit",sparkSatelit,"green");
+      }
+    });
+
+    setInterval(()=>{ document.getElementById("clock").textContent=new Date().toLocaleTimeString(); },1000);
+    const hour=new Date().getHours(); if(hour>=18||hour<6) document.body.classList.add("dark");
+  </script>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</body>
+</html>
